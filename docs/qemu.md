@@ -24,6 +24,31 @@ sudo apt update
 sudo apt install gcc-arm-none-eabi qemu-system-arm gdb-multiarch
 ```
 
+## Run the instruction tests
+
+From the repo root, run:
+
+```sh
+python3 test/qemu/matrix/run.py
+```
+
+The runner checks the original narrow and wide demos, then builds a fresh
+Cortex-M33 ELF for each of 18 additional cases. It uses QEMU TCG with
+one instruction per translation block. For each successful exception return,
+it checks the first guest PC in the trace against the assembly label directly
+after the fault. This catches a wide instruction that resumes in its second
+halfword. Each recoverable access faults twice. The firmware also checks the
+saved PC, data address, exception number and fault flags.
+
+The cases cover word, halfword and byte loads and stores, signed loads,
+register and immediate offsets, both instruction widths, and Thread mode on
+MSP and PSP. Separate images expect the fatal hook for a site outside the
+section, a multiple load outside the section, an active IT block, and a
+BusFault that escalates to HardFault. An unexpected return, timeout, or
+nonzero emulator exit fails the run. These tests cover precise faults on
+this board model. They do not establish recovery from partial device writes,
+stacking errors, imprecise faults, or security-state transitions.
+
 ## Layout
 
 ```text
@@ -215,7 +240,7 @@ Expected: `g_demo_result = 3`,
 
 ## Troubleshooting
 
-- No output: you dropped `-semihosting` (needed for `SYS_EXIT`) or
+- No output: you dropped `-semihosting` (needed for `SYS_EXIT_EXTENDED`) or
   `-nographic` (needed for UART0 on stdio). Keep both.
 - Immediate lockup / no `Reset`: vectors linked at `0x0` instead of
   `0x10000000`. Use `test/qemu/link.ld` as-is on AN505.

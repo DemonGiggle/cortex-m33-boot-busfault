@@ -18,7 +18,7 @@ enum demo_result {
     DEMO_PASSED,
 };
 
-volatile enum demo_result g_demo_result;
+volatile int g_demo_result; /* Shared with the QEMU reporter. */
 
 bool Boot_TryRead32(const volatile uint32_t *address, uint32_t *value)
 {
