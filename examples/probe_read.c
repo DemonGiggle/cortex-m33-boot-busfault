@@ -9,8 +9,7 @@ _Static_assert(((uintptr_t)DEMO_FAULT_ADDRESS & 3U) == 0U,
                "DEMO_FAULT_ADDRESS must be 4-byte aligned.");
 
 extern const uint8_t Demo_ProbeLoad[];
-extern const uint8_t Demo_ProbeResume[];
-bool Boot_TryRead32(const volatile uint32_t *address, uint32_t *value);
+uint32_t Demo_Load32(const volatile uint32_t *address);
 
 enum demo_result {
     DEMO_RUNNING,
@@ -21,17 +20,16 @@ enum demo_result {
 
 volatile enum demo_result g_demo_result;
 
-bool BusFault_GetFixup(const volatile BusFaultRecord *fault, BusFaultFixup *fixup)
+bool Boot_TryRead32(const volatile uint32_t *address, uint32_t *value)
 {
-    /* Recover only from the test load at the chosen data address. */
-    if (fault->pc != (uintptr_t)Demo_ProbeLoad ||
-        (fault->cfsr & SCB_CFSR_BFARVALID_Msk) == 0U ||
-        fault->bfar != (uintptr_t)DEMO_FAULT_ADDRESS) {
+    /* This single-thread test starts a fresh observation for each read. */
+    g_fault.pc_valid = false;
+    const uint32_t word = Demo_Load32(address);
+    if (g_fault.pc_valid && g_fault.pc == (uintptr_t)Demo_ProbeLoad) {
         return false;
     }
 
-    fixup->resume_pc = (uintptr_t)Demo_ProbeResume;
-    fixup->resume_r0 = 0;
+    *value = word;
     return true;
 }
 
@@ -49,7 +47,9 @@ void Boot_Main(void)
     }
 
     /* The failed read must return false and leave the old value in place. */
-    if (Boot_TryRead32(fault_address, &value) || value != test_word) {
+    if (Boot_TryRead32(fault_address, &value) || value != test_word ||
+        (g_fault.cfsr & SCB_CFSR_BFARVALID_Msk) == 0U ||
+        g_fault.bfar != (uintptr_t)fault_address) {
         g_demo_result = DEMO_RECOVERY_FAILED;
         return;
     }

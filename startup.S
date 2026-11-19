@@ -6,7 +6,7 @@
     .equ SHCSR_BUSFAULTENA, (1 << 17)
 
 #ifndef BUSFAULT_USE_VENDOR_STARTUP
-    /* Core vectors. The linker places this table at the boot address. */
+    /* Arm M33 Guide 2.3.4: vector order and exception offsets. */
     .section .vectors, "a", %progbits
     .balign 128
     .global __Vectors
@@ -48,7 +48,7 @@ Default_Handler:
     .type BusFault_Enable, %function
     .thumb_func
 BusFault_Enable:
-    /* Set SHCSR.BUSFAULTENA before code that can fault. */
+    /* Arm M33 Guide 4.2.10: SHCSR bit 17 enables BusFault. */
     ldr     r0, =SCB_SHCSR
     ldr     r1, [r0]
     orr     r1, r1, #SHCSR_BUSFAULTENA

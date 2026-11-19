@@ -1,21 +1,19 @@
     .syntax unified
     .cpu cortex-m33
     .thumb
-    .text
-
-    .global Boot_TryRead32
-    .type Boot_TryRead32, %function
+    .section busfault_skip, "ax", %progbits
+    .balign 2
+    .global Demo_Load32
+    .type Demo_Load32, %function
     .thumb_func
-Boot_TryRead32:
-    mov     r2, r0          /* Keep the address in r2. */
-    movs    r0, #1          /* Return true unless the handler sets r0 to zero. */
+Demo_Load32:
+    /* Raw instruction address for the debugger and test. */
     .global Demo_ProbeLoad
 Demo_ProbeLoad:
-    ldr.n   r3, [r2]        /* This 16-bit load can be skipped. */
-    .global Demo_ProbeResume
-Demo_ProbeResume:
-    cbz     r0, 1f          /* Skip the output store after a failed read. */
-    str     r3, [r1]
-1:
-    bx      lr
-    .size Boot_TryRead32, . - Boot_TryRead32
+#ifdef DEMO_WIDE_LOAD
+    ldr.w   r0, [r0]
+#else
+    ldr.n   r0, [r0]
+#endif
+    bx      lr              /* Both encodings resume here. */
+    .size Demo_Load32, . - Demo_Load32

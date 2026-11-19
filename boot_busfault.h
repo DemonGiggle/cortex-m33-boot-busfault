@@ -15,14 +15,14 @@ typedef struct {
 
 typedef struct {
     uintptr_t resume_pc; /* Even address of a known Thumb instruction. */
-    uint32_t resume_r0;  /* Value to restore in r0. */
+    uint32_t resume_r0;  /* Starts with the saved r0. A board hook may change it. */
 } BusFaultFixup;
 
 extern volatile BusFaultRecord g_fault;
 
 void BusFault_Enable(void);
 
-/* Return true only for a fault site that can safely continue. Set both fields. */
+/* Default policy: skip one instruction in the busfault_skip section. */
 bool BusFault_GetFixup(const volatile BusFaultRecord *fault, BusFaultFixup *fixup);
 
 /* Put the board into a safe state and halt or reset. */
