@@ -5,6 +5,7 @@
     .equ SCB_SHCSR, 0xE000ED24
     .equ SHCSR_BUSFAULTENA, (1 << 17)
 
+#ifndef BUSFAULT_USE_VENDOR_STARTUP
     /* Core vectors. The linker places this table at the boot address. */
     .section .vectors, "a", %progbits
     .balign 128
@@ -29,14 +30,7 @@ __Vectors:
     .type Reset_Handler, %function
     .thumb_func
 Reset_Handler:
-    /* Set SHCSR.BUSFAULTENA before the rest of boot runs. */
-    ldr     r0, =SCB_SHCSR
-    ldr     r1, [r0]
-    orr     r1, r1, #SHCSR_BUSFAULTENA
-    str     r1, [r0]
-    dsb     sy
-    isb     sy
-
+    bl      BusFault_Enable
     bl      Boot_Main
     b       Default_Handler
     .size Reset_Handler, . - Reset_Handler
@@ -47,21 +41,19 @@ Reset_Handler:
 Default_Handler:
     b       .
     .size Default_Handler, . - Default_Handler
+#endif
 
-    /* r0 holds the address. r1 points to the output word. */
-    .global Boot_TryRead32
-    .type Boot_TryRead32, %function
+    .section .text.BusFault_Enable, "ax", %progbits
+    .global BusFault_Enable
+    .type BusFault_Enable, %function
     .thumb_func
-Boot_TryRead32:
-    movs    r3, #1          /* Assume the load will succeed. */
-    .global Boot_ProbeLoad
-Boot_ProbeLoad:
-    ldr.n   r2, [r0]        /* This 16-bit load can be skipped. */
-    .global Boot_ProbeResume
-Boot_ProbeResume:
-    cbz     r3, 1f          /* The handler sets r3 to zero on a fault. */
-    str     r2, [r1]        /* Save the word only after a good read. */
-1:
-    mov     r0, r3          /* Return true for success, false for a fault. */
+BusFault_Enable:
+    /* Set SHCSR.BUSFAULTENA before code that can fault. */
+    ldr     r0, =SCB_SHCSR
+    ldr     r1, [r0]
+    orr     r1, r1, #SHCSR_BUSFAULTENA
+    str     r1, [r0]
+    dsb     sy
+    isb     sy
     bx      lr
-    .size Boot_TryRead32, . - Boot_TryRead32
+    .size BusFault_Enable, . - BusFault_Enable

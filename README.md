@@ -1,45 +1,42 @@
 # Cortex-M33 BusFault during boot
 
-This example shows how to catch a BusFault during boot and continue after a failed test read. It assumes a Cortex-M33 without the Security Extension (TrustZone).
+The handler records faults during boot. A board can approve recovery for a known fault site. The test sample shows how to do this for one failed read.
 
 | File | What it does |
 | --- | --- |
-| [startup.S](startup.S) | Sets up the core vectors, enables BusFault, and provides the test read. |
-| [boot_busfault.c](boot_busfault.c) | Saves fault registers and changes the exception frame for the test read. |
+| [startup.S](startup.S) | Provides the core vectors and `BusFault_Enable`. |
+| [boot_busfault.c](boot_busfault.c) | Handles BusFault and HardFault and records the last fault in `g_fault`. |
+| [boot_busfault.h](boot_busfault.h) | Declares the fault record, fixup, and board hooks. |
+| [examples/](examples/) | Contains the test boot entry, test load, and test fixup. |
 
-## Boot flow
+## Use in firmware
 
-1. At reset, the CPU loads the Main Stack Pointer (MSP) and `Reset_Handler` from the vector table. BusFault is exception 5, at offset `0x14`.
-2. `Reset_Handler` sets `SHCSR.BUSFAULTENA` and calls `Boot_Main`.
-3. In `Boot_Main`, call `Boot_TryRead32` for an aligned address that your board allows you to probe.
+1. Build `boot_busfault.c` with your chip's CMSIS device header. The example includes Arm's generic `ARMCM33.h`.
+2. Use the sample vector table or keep your vendor startup. To keep the vendor startup, build `startup.S` with `-DBUSFAULT_USE_VENDOR_STARTUP`. This builds only `BusFault_Enable`. Point the active exception vectors to `BusFault_Handler` and `HardFault_Handler`. BusFault is exception 5, at offset `0x14`. If you already have a strong HardFault handler, combine the two handlers in your project.
+3. Call `BusFault_Enable` from privileged boot code after the handler stack and the RAM for `g_fault` are ready. If you use the sample vector table, provide the 8-byte-aligned linker symbol `__StackTop` and `Boot_Main`. Place `.vectors` at the boot vector address with the alignment your chip requires. Add the other vectors and runtime setup your chip needs.
 
-```c
-#include <stdbool.h>
-#include <stdint.h>
+The default handler records the fault and halts with normal interrupts masked. For a deployed board, override `BusFault_OnFatal` to put the hardware in a safe state and halt or reset. If you need the record after reset, put `g_fault` in RAM that the reset and startup code preserve.
 
-bool Boot_TryRead32(const volatile uint32_t *address, uint32_t *value);
-```
+## Approve recovery for a known fault site
 
-On success, the function stores the word at `value` and returns `true`. If the test load causes a precise BusFault, the function returns `false` and leaves `*value` as it was.
+Override `BusFault_GetFixup` in board code. Check the saved instruction address in `fault->pc` against a known fault site. Check the data address in `fault->bfar` when the fixup depends on that address. Read BFAR as valid only if `CFSR.BFARVALID` was set.
 
-## How recovery works
+Return `true` with the even Thumb address in `resume_pc` and the value to restore in `r0` in `resume_r0`. Return `false` for any other fault site. The fixup needs to account for the effect of the skipped instruction. Keep both hooks short and avoid accesses that can fault.
 
-1. The handler reads `EXC_RETURN` from `LR` and uses bit 2 to find the stack frame on MSP or PSP.
-2. It checks for a precise data BusFault and a basic frame from Thread mode. It also checks that the saved PC matches `Boot_ProbeLoad`, the 16-bit `LDR` in `startup.S`.
-3. It sets the saved `r3` to zero, writes `Boot_ProbeResume` to the saved PC, and clears the saved fault flags in `CFSR`. Exception return restores the new PC. The next instruction sees `r3` is zero and skips the output store.
+The handler offers recovery for a precise data BusFault with a basic Thread-mode frame and no active IT or ICI state. It uses `EXC_RETURN` to select MSP or PSP, applies the approved fixup, and clears the captured status flags in `CFSR`. Exception return restores the new PC. HardFault and all other BusFault cases go to the fatal hook.
 
-Any other fault stops in the default loop. If BusFault escalates to HardFault, the HardFault handler saves the registers and stops. `g_fault.cfsr` keeps the original status bits for the debugger. `g_fault.bfar` is the data address when `CFSR.BFARVALID` is set. The saved PC gives the instruction address.
+This code assumes a Cortex-M33 without the Security Extension and a working handler stack. Extended floating-point frames go to the fatal hook. Keep the handler and its hooks free of floating-point instructions.
 
-## Board setup
+## Run the test sample
 
-- Keep `.vectors` at the boot vector address and align it as required by your chip. Add the chip's external interrupt entries and provide the 8-byte-aligned `__StackTop` symbol.
-- Use your chip's CMSIS header and provide `Boot_Main`. The stack and RAM for `g_fault` must be ready when the C handler runs. Add the C runtime setup your boot code needs.
-- The example recovers with a basic exception frame. Extended floating-point frames and TrustZone stack state need extra handling.
+1. Build [examples/probe_read.c](examples/probe_read.c) and [examples/probe_read.S](examples/probe_read.S) with the core files. The sample provides `Boot_Main` and its own `BusFault_GetFixup`.
+2. Set `DEMO_FAULT_ADDRESS` when building the sample C file. Choose a 4-byte-aligned address that your chip documents as returning a bus error on read. Some unmapped addresses can return data or stall, depending on the chip.
+3. Run the sample and check `g_demo_result` in a debugger. `DEMO_PASSED` means the first read worked and the faulting read returned `false` with the output value intact. The saved PC moves from `Demo_ProbeLoad` to `Demo_ProbeResume`, the instruction immediately after the 16-bit `LDR`.
 
 ## Official Arm references
 
-- [Cortex-M33 Devices Generic User Guide](https://documentation-service.arm.com/static/66be2153882fec713ef49e49) — Sections 2.3.7.1 and 2.3.7.2 show the stack frame layout, `EXC_RETURN` fields, and how exception return restores the PC. These rules are the basis for the recovery code in this repo.
-- [Cortex-M33 BusFault Status Register](https://documentation-service.arm.com/static/66be2153882fec713ef49e49#page=255) — Section 4.2.11.2 explains `PRECISERR` and why its saved PC points to the faulting instruction. Sections 4.2.10 and 4.2.11 cover BusFault enable and clearing fault flags.
+- [Cortex-M33 Devices Generic User Guide](https://documentation-service.arm.com/static/66be2153882fec713ef49e49) — Sections 2.3.7.1 and 2.3.7.2 show the stack frame, `EXC_RETURN`, and how exception return restores the PC. Section 2.1.3.6.3 describes the Thumb, IT, and ICI bits.
+- [Cortex-M33 BusFault Status Register](https://documentation-service.arm.com/static/66be2153882fec713ef49e49#page=255) — Section 4.2.11.2 explains why the saved PC points to the faulting instruction for `PRECISERR`. Sections 4.2.10 and 4.2.11 cover BusFault enable and clearing fault flags.
 - [CMSIS Cortex-M33 GNU startup file](https://github.com/ARM-software/CMSIS_5/blob/develop/Device/ARM/ARMCM33/Source/GCC/startup_ARMCM33.S) — Arm's assembly vector table.
 - [CMSIS Cortex-M33 core header](https://github.com/ARM-software/CMSIS_6/blob/main/CMSIS/Core/Include/core_cm33.h) — SCB registers and bit masks.
 - [CMSIS-View Fault Storage](https://arm-software.github.io/CMSIS-View/main/group__Fault__Storage.html) — Arm's example for entering a fault handler and saving fault details.
