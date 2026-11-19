@@ -8,6 +8,8 @@ The handler records faults during boot. For a precise data fault in designated b
 | [boot_busfault.c](boot_busfault.c) | Handles BusFault and HardFault and records the last fault in `g_fault`. |
 | [boot_busfault.h](boot_busfault.h) | Declares the fault record, fixup, and board hooks. |
 | [examples/](examples/) | Contains the test boot entry and test load. |
+| [test/qemu/](test/qemu/) | QEMU-only vectors, linker script, harness, and CMSIS for `mps2-an505`. |
+| [docs/qemu.md](docs/qemu.md) | Step-by-step QEMU run (narrow + wide, expected output). |
 
 ## Use in firmware
 
@@ -41,6 +43,8 @@ The bounds are optional weak symbols. With an empty or missing section, the defa
 This code assumes a Cortex-M33 without the Security Extension and a working handler stack. Extended floating-point frames go to the fatal hook. Keep the handler and its hooks free of floating-point instructions.
 
 ## Run the test sample
+
+To run on QEMU with copy-paste commands, see [docs/qemu.md](docs/qemu.md).
 
 1. Build [examples/probe_read.c](examples/probe_read.c) and [examples/probe_read.S](examples/probe_read.S) with the core files and the section placement above. The sample supplies `Boot_Main` and uses the production `BusFault_GetFixup`.
 2. Set `DEMO_FAULT_ADDRESS` when building the sample C file. Choose a 4-byte-aligned address that your chip documents as returning a bus error on read.
