@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include "boot_busfault.h"
 #include "ARMCM33.h"
+#include "exit.h"
 
 /* QEMU-only test harness: UART0 report, then semihosting exit.
  * Production files (boot_busfault.c, examples/probe_read.*) are unchanged.
@@ -15,14 +16,6 @@ extern const uint8_t Demo_ProbeLoad[];
 #define UART_STATE (*(volatile uint32_t *)(UART0_BASE + 0x04))
 #define UART_CTRL  (*(volatile uint32_t *)(UART0_BASE + 0x08))
 #define UART_STATE_TXFULL (1U << 0)
-
-static inline long semi_call(long op, void *arg)
-{
-    register long r0 __asm__("r0") = op;
-    register void *r1 __asm__("r1") = arg;
-    __asm__ volatile ("bkpt 0xAB" : "+r"(r0) : "r"(r1) : "memory", "cc");
-    return r0;
-}
 
 static void uart_init(void)
 {
@@ -70,16 +63,6 @@ static void out_dec(int v)
     out_str(&buf[i+1]);
 }
 
-static void semi_exit(int status)
-{
-    /* SYS_EXIT 0x18 with ADP_Stopped_ApplicationExit */
-    static struct { uint32_t code; uint32_t sub; } blk;
-    blk.code = 0x20026UL; /* ADP_Stopped_ApplicationExit */
-    blk.sub = (uint32_t)status;
-    semi_call(0x18, &blk);
-    for (;;) { }
-}
-
 void QEMU_ReportAndExit(void)
 {
     uart_init();
@@ -102,11 +85,13 @@ void QEMU_ReportAndExit(void)
     out_str(" BFAR="); out_hex32(bfar); out_str(" SHCSR="); out_hex32(shcsr); out_str("\n");
     out_str("Demo_ProbeLoad="); out_hex32((uint32_t)(uintptr_t)Demo_ProbeLoad); out_str("\n");
 
-    if ((int)g_demo_result == 3) {
+    if ((int)g_demo_result == 3 && g_fault.exception == 5 &&
+        g_fault.cfsr == (SCB_CFSR_PRECISERR_Msk | SCB_CFSR_BFARVALID_Msk) &&
+        cfsr == 0 && hfsr == 0) {
         out_str("RESULT: PASS\n");
-        semi_exit(0);
+        QEMU_Exit(0);
     } else {
         out_str("RESULT: FAIL\n");
-        semi_exit(1);
+        QEMU_Exit(1);
     }
 }
