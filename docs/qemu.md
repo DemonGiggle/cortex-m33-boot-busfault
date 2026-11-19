@@ -32,7 +32,8 @@ From the repo root, run:
 python3 test/qemu/matrix/run.py
 ```
 
-The runner builds a fresh Cortex-M33 ELF for each case. It uses QEMU TCG with
+The runner checks the original narrow and wide demos, then builds a fresh
+Cortex-M33 ELF for each of 18 additional cases. It uses QEMU TCG with
 one instruction per translation block. For each successful exception return,
 it checks the first guest PC in the trace against the assembly label directly
 after the fault. This catches a wide instruction that resumes in its second
