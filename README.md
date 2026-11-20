@@ -13,7 +13,7 @@ The handler records faults during boot. For a precise data fault in designated b
 
 ## Use in firmware
 
-1. Build `src/boot_busfault.c` with your chip's CMSIS device header. Add `src/` to the compiler's include path for code that includes `boot_busfault.h`. The example includes Arm's generic `ARMCM33.h`.
+1. Copy the contents of `src/` into your project and build `boot_busfault.c` for Cortex-M33 using a compiler that supports GNU-style inline assembly. Add the copied directory to the include path for `boot_busfault.h`. The files in `src/` do not require CMSIS or a vendor device header; the examples and QEMU harness still use CMSIS.
 2. Use the sample vector table or keep your vendor startup. To keep the vendor startup, build `src/start.S` with `-DBUSFAULT_USE_VENDOR_STARTUP`. This builds only `BusFault_Enable`. Point the active exception vectors to `BusFault_Handler` and `HardFault_Handler`. BusFault is exception 5, at offset `0x14`. If you already have a strong HardFault handler, combine the two handlers in your project.
 3. Call `BusFault_Enable` from privileged boot code after the handler stack and the RAM for `g_fault` are ready. If you use the sample vector table, provide the 8-byte-aligned linker symbol `__StackTop` and `Boot_Main`. Place `.vectors` at the boot vector address with the alignment your chip requires. Add the other vectors and runtime setup your chip needs.
 

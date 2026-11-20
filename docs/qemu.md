@@ -92,7 +92,6 @@ All commands below run from the repo root.
 
 ```sh
 arm-none-eabi-gcc -mcpu=cortex-m33+nodsp+nofp -mthumb -ffreestanding -Os -g \
-  -I test/qemu/cmsis -I src -DDEMO_FAULT_ADDRESS=0x60000000U \
   -c src/boot_busfault.c -o build/qemu/boot.o
 
 arm-none-eabi-gcc -mcpu=cortex-m33+nodsp+nofp -mthumb -ffreestanding -Os -g \

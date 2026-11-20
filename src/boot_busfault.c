@@ -1,6 +1,13 @@
 #include "boot_busfault.h"
-#include "ARMCM33.h" /* Use your chip's CMSIS header. */
 #include <stddef.h>
+
+/* Arm M33 Guide 4.2: System Control Block registers and CFSR bits. */
+#define BUSFAULT_SCB_REG(addr)      (*(volatile uint32_t *)(uintptr_t)(addr))
+#define BUSFAULT_SCB_CFSR           BUSFAULT_SCB_REG(0xE000ED28UL)
+#define BUSFAULT_SCB_HFSR           BUSFAULT_SCB_REG(0xE000ED2CUL)
+#define BUSFAULT_SCB_BFAR           BUSFAULT_SCB_REG(0xE000ED38UL)
+#define BUSFAULT_CFSR_PRECISERR_MSK (1UL << 9)
+#define BUSFAULT_CFSR_BFARVALID_MSK (1UL << 15)
 
 #define EXC_RETURN_THREAD      (1UL << 3)
 #define EXC_RETURN_BASIC_FRAME (1UL << 4)
@@ -50,21 +57,23 @@ __attribute__((weak))
 _Noreturn void BusFault_OnFatal(const volatile BusFaultRecord *fault)
 {
     (void)fault;
-    __disable_irq();
+    __asm__ volatile ("cpsid i" ::: "memory");
     for (;;) {
-        __NOP();
+        __asm__ volatile ("nop");
     }
 }
 
 static uint32_t Capture_Fault(void)
 {
-    const uint32_t cfsr = SCB->CFSR;
+    const uint32_t cfsr = BUSFAULT_SCB_CFSR;
 
-    g_fault.exception = __get_IPSR();
+    uint32_t exception;
+    __asm__ volatile ("mrs %0, ipsr" : "=r" (exception));
+    g_fault.exception = exception;
     g_fault.cfsr = cfsr;
-    g_fault.hfsr = SCB->HFSR;
+    g_fault.hfsr = BUSFAULT_SCB_HFSR;
     /* Arm M33 Guide 4.2.11.2 and 4.2.14: BFAR holds the data address. */
-    g_fault.bfar = (cfsr & SCB_CFSR_BFARVALID_Msk) ? SCB->BFAR : 0U;
+    g_fault.bfar = (cfsr & BUSFAULT_CFSR_BFARVALID_MSK) ? BUSFAULT_SCB_BFAR : 0U;
     g_fault.pc = 0;
     g_fault.pc_valid = false;
     return cfsr;
@@ -79,7 +88,7 @@ static void BusFault_Handle(uint32_t exc_return,
 
     /* Arm M33 Guide 4.2.11.2: PRECISERR identifies the saved instruction.
      * STKERR can leave an incomplete frame. Check status before reading it. */
-    if ((cfsr & ~SCB_CFSR_BFARVALID_Msk) != SCB_CFSR_PRECISERR_Msk ||
+    if ((cfsr & ~BUSFAULT_CFSR_BFARVALID_MSK) != BUSFAULT_CFSR_PRECISERR_MSK ||
         (exc_return & basic_thread) != basic_thread ||
         frame == 0 || ((uintptr_t)frame & 3U) != 0U) {
         BusFault_OnFatal(&g_fault);
@@ -102,8 +111,8 @@ static void BusFault_Handle(uint32_t exc_return,
 
     frame->r0 = fixup.resume_r0;
     frame->pc = fixup.resume_pc;
-    SCB->CFSR = cfsr; /* Arm M33 Guide 4.2.11: write one to clear. */
-    __DSB();
+    BUSFAULT_SCB_CFSR = cfsr; /* Arm M33 Guide 4.2.11: write one to clear. */
+    __asm__ volatile ("dsb sy" ::: "memory");
 }
 
 __attribute__((naked))
