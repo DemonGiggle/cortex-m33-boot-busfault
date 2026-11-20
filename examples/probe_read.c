@@ -1,4 +1,4 @@
-#include "../boot_busfault.h"
+#include "boot_busfault.h"
 #include "ARMCM33.h"
 
 #ifndef DEMO_FAULT_ADDRESS

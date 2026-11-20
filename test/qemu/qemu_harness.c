@@ -5,7 +5,7 @@
 #include "exit.h"
 
 /* QEMU-only test harness: UART0 report, then semihosting exit.
- * Production files (boot_busfault.c, examples/probe_read.*) are unchanged.
+ * Production files in src/ and examples/ are built without test-only changes.
  */
 
 extern volatile int g_demo_result;

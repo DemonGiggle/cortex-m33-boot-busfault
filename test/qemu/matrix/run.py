@@ -6,10 +6,11 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[3]
+SRC = ROOT / "src"
 TEST = ROOT / "test/qemu"
 MATRIX = TEST / "matrix"
 CC = ["arm-none-eabi-gcc", "-mcpu=cortex-m33+nodsp+nofp", "-mthumb",
-      "-ffreestanding", "-Os", "-g", "-I", str(ROOT), "-I", str(TEST / "cmsis")]
+      "-ffreestanding", "-Os", "-g", "-I", str(SRC), "-I", str(TEST / "cmsis")]
 # Name, instruction, width in bytes, data address offset, extra build flags.
 CASES = [
     ("word-read", "ldr.n r1, [r0]", 2, 0, []),
@@ -74,7 +75,7 @@ def limit_trace():
 def build(tmp, defines, sources):
     elf = tmp / "probe.elf"
     subprocess.run([*CC, *defines, "-DBUSFAULT_USE_VENDOR_STARTUP", "-nostdlib",
-                    "-T", TEST / "link.ld", ROOT / "startup.S", ROOT / "boot_busfault.c",
+                    "-T", TEST / "link.ld", SRC / "start.S", SRC / "boot_busfault.c",
                     TEST / "qemu_vectors.S", *sources, "-lgcc", "-o", elf], check=True)
     return elf
 

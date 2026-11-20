@@ -4,17 +4,17 @@ The handler records faults during boot. For a precise data fault in designated b
 
 | File | What it does |
 | --- | --- |
-| [startup.S](startup.S) | Provides the core vectors and `BusFault_Enable`. |
-| [boot_busfault.c](boot_busfault.c) | Handles BusFault and HardFault and records the last fault in `g_fault`. |
-| [boot_busfault.h](boot_busfault.h) | Declares the fault record, fixup, and board hooks. |
+| [src/start.S](src/start.S) | Provides the core vectors and `BusFault_Enable`. |
+| [src/boot_busfault.c](src/boot_busfault.c) | Handles BusFault and HardFault and records the last fault in `g_fault`. |
+| [src/boot_busfault.h](src/boot_busfault.h) | Declares the fault record, fixup, and board hooks. |
 | [examples/](examples/) | Contains the test boot entry and test load. |
 | [test/qemu/](test/qemu/) | QEMU-only vectors, linker script, harness, and CMSIS for `mps2-an505`. |
 | [docs/qemu.md](docs/qemu.md) | Step-by-step QEMU run (narrow + wide, expected output). |
 
 ## Use in firmware
 
-1. Build `boot_busfault.c` with your chip's CMSIS device header. The example includes Arm's generic `ARMCM33.h`.
-2. Use the sample vector table or keep your vendor startup. To keep the vendor startup, build `startup.S` with `-DBUSFAULT_USE_VENDOR_STARTUP`. This builds only `BusFault_Enable`. Point the active exception vectors to `BusFault_Handler` and `HardFault_Handler`. BusFault is exception 5, at offset `0x14`. If you already have a strong HardFault handler, combine the two handlers in your project.
+1. Build `src/boot_busfault.c` with your chip's CMSIS device header. Add `src/` to the compiler's include path for code that includes `boot_busfault.h`. The example includes Arm's generic `ARMCM33.h`.
+2. Use the sample vector table or keep your vendor startup. To keep the vendor startup, build `src/start.S` with `-DBUSFAULT_USE_VENDOR_STARTUP`. This builds only `BusFault_Enable`. Point the active exception vectors to `BusFault_Handler` and `HardFault_Handler`. BusFault is exception 5, at offset `0x14`. If you already have a strong HardFault handler, combine the two handlers in your project.
 3. Call `BusFault_Enable` from privileged boot code after the handler stack and the RAM for `g_fault` are ready. If you use the sample vector table, provide the 8-byte-aligned linker symbol `__StackTop` and `Boot_Main`. Place `.vectors` at the boot vector address with the alignment your chip requires. Add the other vectors and runtime setup your chip needs.
 
 If recovery fails, the default fatal hook halts with normal interrupts masked. For a deployed board, override `BusFault_OnFatal` to put the hardware in a safe state and halt or reset. If you need the record after reset, put `g_fault` in RAM that the reset and startup code preserve.

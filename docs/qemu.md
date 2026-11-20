@@ -1,6 +1,6 @@
 # Testing on QEMU (mps2-an505, Cortex-M33)
 
-This runs the in-repo sample (`boot_busfault.c` + `examples/probe_read.*`)
+This runs the in-repo sample (`src/boot_busfault.c` + `examples/probe_read.*`)
 on QEMU with no board needed. It checks both Thumb encodings:
 
 - narrow: `ldr.n r0, [r0]` (`0x6800`)
@@ -52,8 +52,8 @@ stacking errors, imprecise faults, or security-state transitions.
 ## Layout
 
 ```text
-boot_busfault.c / boot_busfault.h   production handler (unchanged)
-startup.S                           production vectors + BusFault_Enable (unchanged)
+src/boot_busfault.{c,h}             production handler
+src/start.S                         production vectors + BusFault_Enable
 examples/probe_read.c               Boot_Main + Boot_TryRead32 (unchanged)
 examples/probe_read.S               Demo_Load32 in busfault_skip (unchanged)
 test/qemu/qemu_vectors.S            QEMU-only Reset (init .data/.bss, call report)
@@ -87,20 +87,20 @@ All commands below run from the repo root.
 ## 1. Build the narrow (16-bit) test
 
 `+nodsp+nofp` matches the vendored `ARMCM33.h` (no DSP, no FPU).
-`startup.S` is built with `-DBUSFAULT_USE_VENDOR_STARTUP` so only
+`src/start.S` is built with `-DBUSFAULT_USE_VENDOR_STARTUP` so only
 `BusFault_Enable` is used; vectors/reset come from `qemu_vectors.S`.
 
 ```sh
 arm-none-eabi-gcc -mcpu=cortex-m33+nodsp+nofp -mthumb -ffreestanding -Os -g \
-  -I test/qemu/cmsis -I . -DDEMO_FAULT_ADDRESS=0x60000000U \
-  -c boot_busfault.c -o build/qemu/boot.o
+  -I test/qemu/cmsis -I src -DDEMO_FAULT_ADDRESS=0x60000000U \
+  -c src/boot_busfault.c -o build/qemu/boot.o
 
 arm-none-eabi-gcc -mcpu=cortex-m33+nodsp+nofp -mthumb -ffreestanding -Os -g \
-  -I test/qemu/cmsis -I . -DDEMO_FAULT_ADDRESS=0x60000000U \
+  -I test/qemu/cmsis -I src -DDEMO_FAULT_ADDRESS=0x60000000U \
   -c examples/probe_read.c -o build/qemu/probe.o
 
 arm-none-eabi-gcc -mcpu=cortex-m33+nodsp+nofp -mthumb -ffreestanding -Os -g \
-  -I test/qemu/cmsis -I . \
+  -I test/qemu/cmsis -I src \
   -c test/qemu/qemu_harness.c -o build/qemu/harness.o
 
 arm-none-eabi-gcc -mcpu=cortex-m33+nodsp+nofp -mthumb -ffreestanding -Os -g \
@@ -111,7 +111,7 @@ arm-none-eabi-gcc -mcpu=cortex-m33+nodsp+nofp -mthumb -ffreestanding -Os -g \
 
 arm-none-eabi-gcc -mcpu=cortex-m33+nodsp+nofp -mthumb -ffreestanding -Os -g \
   -DBUSFAULT_USE_VENDOR_STARTUP \
-  -c startup.S -o build/qemu/startup_enable.o
+  -c src/start.S -o build/qemu/startup_enable.o
 
 arm-none-eabi-gcc -mcpu=cortex-m33+nodsp+nofp -mthumb -ffreestanding -Os -g \
   -nostartfiles -T test/qemu/link.ld \
