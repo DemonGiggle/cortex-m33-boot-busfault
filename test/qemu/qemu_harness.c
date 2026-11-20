@@ -9,7 +9,7 @@
  */
 
 extern volatile int g_demo_result;
-extern const uint8_t Demo_ProbeLoad[];
+extern const uint8_t BusFault_Read32_Load[];
 
 #define UART0_BASE 0x50200000UL /* secure alias of 0x40200000 */
 #define UART_DATA  (*(volatile uint32_t *)(UART0_BASE + 0x00))
@@ -83,11 +83,12 @@ void QEMU_ReportAndExit(void)
     out_str("g_fault.pc="); out_hex32((uint32_t)g_fault.pc); out_str(" valid="); out_dec(g_fault.pc_valid ? 1 : 0); out_str("\n");
     out_str("live SCB->CFSR="); out_hex32(cfsr); out_str(" HFSR="); out_hex32(hfsr);
     out_str(" BFAR="); out_hex32(bfar); out_str(" SHCSR="); out_hex32(shcsr); out_str("\n");
-    out_str("Demo_ProbeLoad="); out_hex32((uint32_t)(uintptr_t)Demo_ProbeLoad); out_str("\n");
+    out_str("BusFault_Read32_Load="); out_hex32((uint32_t)(uintptr_t)BusFault_Read32_Load); out_str("\n");
 
     if ((int)g_demo_result == 3 && g_fault.exception == 5 &&
         g_fault.cfsr == (SCB_CFSR_PRECISERR_Msk | SCB_CFSR_BFARVALID_Msk) &&
-        cfsr == 0 && hfsr == 0) {
+        g_fault.pc_valid && g_fault.pc == (uintptr_t)BusFault_Read32_Load &&
+        g_fault.bfar == DEMO_FAULT_ADDRESS && cfsr == 0 && hfsr == 0) {
         out_str("RESULT: PASS\n");
         QEMU_Exit(0);
     } else {

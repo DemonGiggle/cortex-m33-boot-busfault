@@ -26,14 +26,6 @@ SECTIONS
     . = ALIGN(2);
   } > FLASH
 
-  busfault_skip ALIGN(2) :
-  {
-    __start_busfault_skip = .;
-    KEEP(*(busfault_skip))
-    KEEP(*(.busfault_skip*))
-    __stop_busfault_skip = .;
-  } > FLASH
-
   .ARM.exidx :
   {
     *(.ARM.exidx*)

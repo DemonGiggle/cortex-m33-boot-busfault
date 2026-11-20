@@ -2,11 +2,7 @@
     .cpu cortex-m33
     .thumb
 
-#ifdef OUTSIDE_SECTION
     .text
-#else
-    .section busfault_skip, "ax", %progbits
-#endif
     .balign 2
     .global Probe_Access
     .thumb_func
@@ -19,6 +15,8 @@ Probe_Access:
     .global Probe_Fault
 Probe_Fault:
     PROBE_OP
+    /* Test-only width marker: the handler must never resume here.
+     * Every fault at Probe_Fault is expected to reach BusFault_OnFatal. */
     .global Probe_Resume
 Probe_Resume:
 #ifdef IN_IT

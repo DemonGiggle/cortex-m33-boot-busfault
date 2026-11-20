@@ -13,17 +13,14 @@ typedef struct {
     bool pc_valid;
 } BusFaultRecord;
 
-typedef struct {
-    uintptr_t resume_pc; /* Even address of a known Thumb instruction. */
-    uint32_t resume_r0;  /* Starts with the saved r0. A board hook may change it. */
-} BusFaultFixup;
-
 extern volatile BusFaultRecord g_fault;
 
 void BusFault_Enable(void);
 
-/* Default policy: skip one instruction in the busfault_skip section. */
-bool BusFault_GetFixup(const volatile BusFaultRecord *fault, BusFaultFixup *fixup);
+/* Thread mode, aligned source, valid writable output. On a precise BusFault
+ * at the source load, return false and leave *out unchanged. */
+bool BusFault_TryRead32(const volatile uint32_t *address, uint32_t *out)
+    __attribute__((warn_unused_result));
 
 /* Put the board into a safe state and halt or reset. */
 _Noreturn void BusFault_OnFatal(const volatile BusFaultRecord *fault);

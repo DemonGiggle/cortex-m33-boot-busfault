@@ -3,9 +3,9 @@
     .thumb
 
     /* QEMU-only vectors for mps2-an505.
-     * Same layout as the sample startup.S, but Reset_Handler
+     * Same layout as the sample src/start.S, but Reset_Handler
      * initialises .data/.bss and reports via QEMU_ReportAndExit.
-     * Production firmware should keep using startup.S.
+     * Production firmware should keep using src/start.S.
      */
     .section .vectors, "a", %progbits
     .balign 128
@@ -52,6 +52,13 @@ Reset_Handler:
     b 3b
 4:
     bl BusFault_Enable
+#ifdef DEMO_USE_PSP
+    ldr r0, =demo_stack_top
+    msr psp, r0
+    movs r0, #2
+    msr control, r0
+    isb
+#endif
     bl Boot_Main
     bl QEMU_ReportAndExit
     b Default_Handler
@@ -63,3 +70,10 @@ Reset_Handler:
 Default_Handler:
     b .
     .size Default_Handler, . - Default_Handler
+
+#ifdef DEMO_USE_PSP
+    .bss
+    .balign 8
+    .space 1024
+demo_stack_top:
+#endif

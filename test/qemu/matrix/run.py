@@ -11,6 +11,7 @@ TEST = ROOT / "test/qemu"
 MATRIX = TEST / "matrix"
 CC = ["arm-none-eabi-gcc", "-mcpu=cortex-m33+nodsp+nofp", "-mthumb",
       "-ffreestanding", "-Os", "-g", "-I", str(SRC), "-I", str(TEST / "cmsis")]
+# Unguarded instructions: all must reach the fatal hook, regardless of encoding.
 # Name, instruction, width in bytes, data address offset, extra build flags.
 CASES = [
     ("word-read", "ldr.n r1, [r0]", 2, 0, []),
@@ -27,10 +28,8 @@ CASES = [
     ("wide-half", "strh.w r1, [r0, #2]", 4, 2, []),
     ("psp-read", "ldr.n r1, [r0]", 2, 0, ["USE_PSP"]),
     ("psp-wide-write", "str.w r1, [r0]", 4, 0, ["USE_PSP"]),
-    ("outside", "ldr.n r1, [r0]", 2, 0, ["EXPECT_FATAL", "OUTSIDE_SECTION"]),
-    ("outside-multiple", "ldmia r0!, {r1,r2}", 2, 0, ["EXPECT_FATAL", "OUTSIDE_SECTION"]),
-    ("it-block", "ldreq.n r1, [r0]", 2, 0, ["EXPECT_FATAL", "IN_IT"]),
-    ("disabled", "ldr.n r1, [r0]", 2, 0, ["EXPECT_FATAL", "ESCALATE"]),
+    ("multiple", "ldmia r0!, {r1,r2}", 2, 0, []),
+    ("it-block", "ldreq.n r1, [r0]", 2, 0, ["IN_IT"]),
 ]
 
 TRACE_PC = re.compile(r"Trace \d+: .*?\[[0-9a-fA-F]+/([0-9a-fA-F]+)/")
@@ -76,7 +75,7 @@ def build(tmp, defines, sources):
     elf = tmp / "probe.elf"
     subprocess.run([*CC, *defines, "-DBUSFAULT_USE_VENDOR_STARTUP", "-nostdlib",
                     "-T", TEST / "link.ld", SRC / "start.S", SRC / "boot_busfault.c",
-                    TEST / "qemu_vectors.S", *sources, "-lgcc", "-o", elf], check=True)
+                    SRC / "try_read32.S", TEST / "qemu_vectors.S", *sources, "-lgcc", "-o", elf], check=True)
     return elf
 
 
@@ -93,17 +92,24 @@ def run_qemu(elf, site, resume, psp, attempts, recoveries):
 def main():
     with tempfile.TemporaryDirectory() as directory:
         tmp = Path(directory)
-        for width in (2, 4):
-            print(f"RUN  original demo ({width} bytes)", flush=True)
+        for psp in (False, True):
+            stack = "PSP" if psp else "MSP"
+            print(f"RUN  caller-opted read on {stack}", flush=True)
             defs = ["-DDEMO_FAULT_ADDRESS=0x60000000U"]
-            if width == 4:
-                defs.append("-DDEMO_WIDE_LOAD")
-            elf = build(tmp, defs, [ROOT / "examples/probe_read.S",
-                                    ROOT / "examples/probe_read.c", TEST / "qemu_harness.c"])
-            site = symbols(elf)["Demo_ProbeLoad"]
-            # The first load succeeds. The second reaches the same PC and faults.
-            run_qemu(elf, site, site + width, False, attempts=2, recoveries=1)
-            print(f"PASS original demo ({width} bytes)", flush=True)
+            if psp:
+                defs.append("-DDEMO_USE_PSP")
+            elf = build(tmp, defs, [ROOT / "examples/probe_read.c", TEST / "qemu_harness.c"])
+            labels = symbols(elf)
+            # Successful read, faulting read, successful read. Only the fault returns here.
+            run_qemu(elf, labels["BusFault_Read32_Load"], labels["BusFault_Read32_Failed"],
+                     psp, attempts=3, recoveries=1)
+            print(f"PASS caller-opted read on {stack}", flush=True)
+
+        for flag in ("ESCALATE", "BAD_OUTPUT"):
+            print(f"RUN  {flag}", flush=True)
+            elf = build(tmp, [f"-D{flag}", "-DADDRESS_OFFSET=0"], [MATRIX / "check.c"])
+            run_qemu(elf, symbols(elf)["BusFault_Read32_Load"], None, False, attempts=1, recoveries=0)
+            print(f"PASS {flag}", flush=True)
 
         for name, opcode, width, offset, flags in CASES:
             print(f"RUN  {name}: {opcode}", flush=True)
@@ -114,11 +120,9 @@ def main():
             site, resume = labels["Probe_Fault"], labels["Probe_Resume"]
             if resume - site != width:
                 raise RuntimeError(f"{name}: assembler emitted {resume-site} bytes")
-            fatal = "EXPECT_FATAL" in flags
-            run_qemu(elf, site, resume, "USE_PSP" in flags,
-                     attempts=1 if fatal else 2, recoveries=0 if fatal else 2)
+            run_qemu(elf, site, None, "USE_PSP" in flags, attempts=1, recoveries=0)
             print(f"PASS {name}", flush=True)
-    print(f"PASS: {len(CASES) + 2} QEMU cases")
+    print(f"PASS: {len(CASES) + 4} QEMU cases")
 
 
 if __name__ == "__main__":
