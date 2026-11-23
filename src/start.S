@@ -2,10 +2,10 @@
     .cpu cortex-m33
     .thumb
 
+#ifndef BUSFAULT_USE_VENDOR_STARTUP
     .equ SCB_SHCSR, 0xE000ED24
     .equ SHCSR_BUSFAULTENA, (1 << 17)
 
-#ifndef BUSFAULT_USE_VENDOR_STARTUP
     /* Arm M33 Guide 2.3.4: vector order and exception offsets. */
     .section .vectors, "a", %progbits
     .balign 128
@@ -30,7 +30,13 @@ __Vectors:
     .type Reset_Handler, %function
     .thumb_func
 Reset_Handler:
-    bl      BusFault_Enable
+    /* Arm M33 Guide 4.2.10: SHCSR bit 17 enables BusFault. */
+    ldr     r0, =SCB_SHCSR
+    ldr     r1, [r0]
+    orr     r1, r1, #SHCSR_BUSFAULTENA
+    str     r1, [r0]
+    dsb     sy
+    isb     sy
     bl      Boot_Main
     b       Default_Handler
     .size Reset_Handler, . - Reset_Handler
@@ -42,18 +48,3 @@ Default_Handler:
     b       .
     .size Default_Handler, . - Default_Handler
 #endif
-
-    .section .text.BusFault_Enable, "ax", %progbits
-    .global BusFault_Enable
-    .type BusFault_Enable, %function
-    .thumb_func
-BusFault_Enable:
-    /* Arm M33 Guide 4.2.10: SHCSR bit 17 enables BusFault. */
-    ldr     r0, =SCB_SHCSR
-    ldr     r1, [r0]
-    orr     r1, r1, #SHCSR_BUSFAULTENA
-    str     r1, [r0]
-    dsb     sy
-    isb     sy
-    bx      lr
-    .size BusFault_Enable, . - BusFault_Enable

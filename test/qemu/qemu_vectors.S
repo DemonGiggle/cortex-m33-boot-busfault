@@ -2,6 +2,9 @@
     .cpu cortex-m33
     .thumb
 
+    .equ SCB_SHCSR, 0xE000ED24
+    .equ SHCSR_BUSFAULTENA, (1 << 17)
+
     /* QEMU-only vectors for mps2-an505.
      * Same layout as the sample src/start.S, but Reset_Handler
      * initialises .data/.bss and reports via QEMU_ReportAndExit.
@@ -51,7 +54,13 @@ Reset_Handler:
     str r3, [r0], #4
     b 3b
 4:
-    bl BusFault_Enable
+    /* Enable BusFault once .data and .bss are ready. */
+    ldr r0, =SCB_SHCSR
+    ldr r1, [r0]
+    orr r1, r1, #SHCSR_BUSFAULTENA
+    str r1, [r0]
+    dsb sy
+    isb sy
 #ifdef DEMO_USE_PSP
     ldr r0, =demo_stack_top
     msr psp, r0

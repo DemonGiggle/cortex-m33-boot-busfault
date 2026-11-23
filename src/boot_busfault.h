@@ -15,8 +15,6 @@ typedef struct {
 
 extern volatile BusFaultRecord g_fault;
 
-void BusFault_Enable(void);
-
 /* Thread mode, aligned source, valid writable output. On a precise BusFault
  * at the source load, return false and leave *out unchanged. */
 bool BusFault_TryRead32(const volatile uint32_t *address, uint32_t *out)
