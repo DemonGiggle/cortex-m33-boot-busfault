@@ -20,7 +20,12 @@ extern volatile BusFaultRecord g_fault;
 bool BusFault_TryRead32(const volatile uint32_t *address, uint32_t *out)
     __attribute__((warn_unused_result));
 
-/* Put the board into a safe state and halt or reset. */
+/* By default, mask interrupts, print via BusFault_FatalWrite if provided,
+ * then halt. A board override should put the board in a safe state. */
 _Noreturn void BusFault_OnFatal(const volatile BusFaultRecord *fault);
+
+/* Optional sink for the default hook. Consume each NUL-terminated fragment
+ * before returning. Use bounded polling and avoid locks or interrupts. */
+void BusFault_FatalWrite(const char *text);
 
 #endif

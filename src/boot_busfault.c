@@ -28,11 +28,38 @@ extern const uint8_t BusFault_Read32_Load[], BusFault_Read32_Failed[];
 
 volatile BusFaultRecord g_fault;
 
+extern void BusFault_FatalWrite(const char *text) __attribute__((weak));
+
+static void Fatal_WriteHex(const char *label, uint32_t value)
+{
+    static const char digits[] = "0123456789abcdef";
+    char text[12];
+
+    text[0] = '0';
+    text[1] = 'x';
+    for (unsigned int i = 0; i < 8; ++i) {
+        text[2 + i] = digits[(value >> (28U - 4U * i)) & 0xFU];
+    }
+    text[10] = '\n';
+    text[11] = '\0';
+    BusFault_FatalWrite(label);
+    BusFault_FatalWrite(text);
+}
+
 __attribute__((weak))
 _Noreturn void BusFault_OnFatal(const volatile BusFaultRecord *fault)
 {
-    (void)fault;
     __asm__ volatile ("cpsid i" ::: "memory");
+    if (BusFault_FatalWrite != NULL) {
+        BusFault_FatalWrite("\nFatal fault\n");
+        Fatal_WriteHex("exception=", fault->exception);
+        Fatal_WriteHex("cfsr=", fault->cfsr);
+        Fatal_WriteHex("hfsr=", fault->hfsr);
+        Fatal_WriteHex((fault->cfsr & BUSFAULT_CFSR_BFARVALID_MSK) ?
+                       "bfar=" : "bfar (invalid)=", fault->bfar);
+        Fatal_WriteHex("pc=", (uint32_t)fault->pc);
+        BusFault_FatalWrite(fault->pc_valid ? "pc_valid=1\n" : "pc_valid=0\n");
+    }
     for (;;) {
         __asm__ volatile ("nop");
     }

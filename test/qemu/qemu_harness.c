@@ -16,10 +16,11 @@ extern const uint8_t BusFault_Read32_Load[];
 #define UART_STATE (*(volatile uint32_t *)(UART0_BASE + 0x04))
 #define UART_CTRL  (*(volatile uint32_t *)(UART0_BASE + 0x08))
 #define UART_STATE_TXFULL (1U << 0)
+#define UART_CTRL_TXEN (1U << 0)
 
 static void uart_init(void)
 {
-    UART_CTRL = (1U << 0) | (1U << 1); /* TX_EN | RX_EN */
+    UART_CTRL = UART_CTRL_TXEN | (1U << 1); /* TX_EN | RX_EN */
 }
 
 static void uart_putc(char c)
@@ -36,6 +37,14 @@ static void out_str(const char *s)
         if (*p == '\n') uart_putc('\r');
         uart_putc(*p);
     }
+}
+
+void BusFault_FatalWrite(const char *text)
+{
+    if ((UART_CTRL & UART_CTRL_TXEN) == 0) {
+        uart_init();
+    }
+    out_str(text);
 }
 
 static void out_hex32(uint32_t v)

@@ -23,7 +23,9 @@ address unless the board permits the read and its possible device side effects.
 2. To use the sample startup, build `src/start.S` and provide the 8-byte-aligned linker symbol `__StackTop` and `Boot_Main`. Place `.vectors` at the boot vector address with the alignment your chip requires. `Reset_Handler` enables BusFault before calling `Boot_Main`. Add the other vectors and runtime setup your chip needs.
 3. To keep your vendor startup, omit `src/start.S` or build it with `-DBUSFAULT_USE_VENDOR_STARTUP` to suppress the sample startup. Point the active exception vectors to `BusFault_Handler` and `HardFault_Handler`. BusFault is exception 5, at offset `0x14`. If you already have a strong HardFault handler, combine the two handlers in your project. From privileged boot code, set bit 17 (`BUSFAULTENA`) in `SCB->SHCSR`, preserving the other bits, then execute `DSB` and `ISB` as shown in `src/start.S`. Do this after the handler stack and the RAM for `g_fault` are ready, before the first guarded read.
 
-If recovery fails, the default fatal hook halts with normal interrupts masked. For a deployed board, override `BusFault_OnFatal` to put the hardware in a safe state and halt or reset. If you need the record after reset, put `g_fault` in RAM that the reset and startup code preserve.
+If recovery fails, the default `BusFault_OnFatal` masks normal interrupts and halts. To print the captured `exception`, `cfsr`, `hfsr`, `bfar`, `pc`, and `pc_valid` before halting, define `BusFault_FatalWrite(const char *text)` in your board code. The hook passes short, NUL-terminated fragments to the writer. Use a console available during boot with bounded polling and no locks or interrupt dependencies. The QEMU sample connects this hook to UART0.
+
+Override `BusFault_OnFatal` if your board needs to put hardware in a safe state or reset. If you need the record after reset, put `g_fault` in RAM that the reset and startup code preserve.
 
 ## What the handler catches
 
